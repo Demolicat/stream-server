@@ -5,3 +5,4 @@ opencv-python~=4.5.1.48
 imagezmq~=1.1.1
 pytest~=6.2.2
 requests
+dependency-injector~=4.29.1
