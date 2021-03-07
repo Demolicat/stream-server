@@ -1,12 +1,11 @@
-import json
-from types import SimpleNamespace
 from unittest import TestCase, mock
-from fastapi.testclient import TestClient
-from fastapi import status
-from application import app
-import pytest
 
-from src.schemes.streaming_device import StreamingDevice, State
+import pytest
+from fastapi import status
+from fastapi.testclient import TestClient
+
+from application import app
+from src.schemes.streaming_device import StreamingDevice
 from src.services.receiver_service import ReceiverService
 
 
