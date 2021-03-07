@@ -19,7 +19,7 @@ class ReceiverService:
             self.devices.get(device_id).state,
         )
 
-    def stop_capture(self, device_id: str):
+    def stop_capture(self, device_id: str) -> typing.Tuple[str, State]:
         if device_id in self.devices:
             self.devices.get(device_id).stop_playing()
         else:
