@@ -1,10 +1,13 @@
-from unittest import TestCase
+import json
+from types import SimpleNamespace
+from unittest import TestCase, mock
 from fastapi.testclient import TestClient
 from fastapi import status
-from src.entrypoints.streamAPI import app
+from application import app
 import pytest
 
-from src.schemes.streaming_device import StreamingDevice
+from src.schemes.streaming_device import StreamingDevice, State
+from src.services.receiver_service import ReceiverService
 
 
 @pytest.fixture
@@ -22,7 +25,12 @@ def setup(request):
 @pytest.mark.usefixtures("setup")
 class TestStreamAPI(TestCase):
     def test_change_stream_state_stops(self):
-        self.client.post(f"{self.base_url}/devices", json=self.payload)
+        service_mock = mock.Mock(ReceiverService)
+        service_mock.stop_capture.return_value = "tcp://0.0.0.0:5555", "stop"
+
+        app.container.receiver_service.override(service_mock)
+
+        self.payload["state"] = "stop"
         response = self.client.post(f"{self.base_url}/stream", json=self.payload)
 
         assert response.status_code == status.HTTP_200_OK
@@ -30,7 +38,11 @@ class TestStreamAPI(TestCase):
         assert response.json()["state"] == "stop"
 
     def test_change_stream_state_starts(self):
-        self.client.post(f"{self.base_url}/devices", json=self.payload)
+        service_mock = mock.Mock(ReceiverService)
+        service_mock.start_capture.return_value = "tcp://0.0.0.0:5555", "play"
+
+        app.container.receiver_service.override(service_mock)
+
         self.payload["state"] = "play"
         response = self.client.post(f"{self.base_url}/stream", json=self.payload)
 
@@ -39,21 +51,35 @@ class TestStreamAPI(TestCase):
         assert response.json()["state"] == "play"
 
     def test_add_device(self):
+        service_mock = mock.Mock(ReceiverService)
+        service_mock.add_device.return_value = True
+
+        app.container.receiver_service.override(service_mock)
+
         response = self.client.post(f"{self.base_url}/devices", json=self.payload)
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_add_device_already_exists(self):
-        self.client.post(f"{self.base_url}/devices", json=self.payload)
+        service_mock = mock.Mock(ReceiverService)
+        service_mock.add_device.return_value = False
+
+        app.container.receiver_service.override(service_mock)
+
         response = self.client.post(f"{self.base_url}/devices", json=self.payload)
         assert response.status_code == status.HTTP_409_CONFLICT
 
     def test_remove_device(self):
-        self.client.post(f"{self.base_url}/devices", json=self.payload)
+        service_mock = mock.Mock(ReceiverService)
+
+        app.container.receiver_service.override(service_mock)
         response = self.client.delete(f"{self.base_url}/devices", json=self.payload)
         assert response.status_code == status.HTTP_200_OK
 
     def test_remove_device_not_exists(self):
-        self.client.delete(f"{self.base_url}/devices", json=self.payload)
+        service_mock = mock.Mock(ReceiverService)
+        service_mock.remove_device.side_effect = KeyError
+
+        app.container.receiver_service.override(service_mock)
         response = self.client.delete(f"{self.base_url}/devices", json=self.payload)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -80,20 +106,27 @@ class TestStreamAPI(TestCase):
                 },
             )
         )
-        self.client.post(f"{self.base_url}/devices", json=self.payload)
 
-        self.payload["mac"] = "48:45:20:28:4b:ee"
-        self.client.post(f"{self.base_url}/devices", json=self.payload)
+        devices = dict(
+            (device["mac"], StreamingDevice(**device)) for device in expected
+        )
 
-        self.payload["mac"] = "48:45:20:28:4b:ec"
-        self.client.post(f"{self.base_url}/devices", json=self.payload)
+        service_mock = mock.Mock(ReceiverService)
+        service_mock.devices = devices
+
+        app.container.receiver_service.override(service_mock)
+
         response = self.client.get(f"{self.base_url}/devices")
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json() == expected
 
     def test_device_not_found_when_change_stream_state_without_register(self):
-        self.client.delete(f"{self.base_url}/devices", json=self.payload)
+        service_mock = mock.Mock(ReceiverService)
+        service_mock.start_capture.side_effect = KeyError
+        service_mock.stop_capture.side_effect = KeyError
+
+        app.container.receiver_service.override(service_mock)
         response = self.client.post(f"{self.base_url}/stream", json=self.payload)
 
         assert response.status_code == status.HTTP_404_NOT_FOUND

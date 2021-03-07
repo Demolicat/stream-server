@@ -10,7 +10,9 @@ class ReceiverService:
 
     def start_capture(self, device_id: str) -> typing.Tuple[str, State]:
         if device_id in self.devices:
-            threading.Thread(target=self.devices.get(device_id).start_playing).start()
+            thread = threading.Thread(target=self.devices.get(device_id).start_playing)
+            # thread.setDaemon(True)
+            thread.start()
         else:
             raise KeyError()
 

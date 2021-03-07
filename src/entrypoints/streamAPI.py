@@ -1,28 +1,32 @@
 import typing
 
-import uvicorn
-from fastapi import FastAPI, status
+from dependency_injector.wiring import Provide, inject
+from fastapi import status, Depends, APIRouter
 from fastapi.responses import JSONResponse
 
+from di.container import Container
 from src.schemes.stream_state_response_schema import StreamStateResponse
 from src.schemes.streaming_device import StreamingDevice, State
 from src.services.receiver_service import ReceiverService
 
-app = FastAPI()
-receiver_service = ReceiverService()
+router = APIRouter()
 
 
-@app.get("/")
+@router.get("/")
 async def root():
     return {"message": "Hello World"}
 
 
-@app.post(
+@router.post(
     "/api/v1/stream",
     response_model=StreamStateResponse,
     responses={status.HTTP_404_NOT_FOUND: {"message": "Device not found"}},
 )
-async def change_stream_state(device: StreamingDevice):
+@inject
+async def change_stream_state(
+    device: StreamingDevice,
+    receiver_service: ReceiverService = Depends(Provide[Container.receiver_service]),
+):
     response = StreamStateResponse(mac=device.mac, address="", state=State.STOPPED)
 
     try:
@@ -40,14 +44,18 @@ async def change_stream_state(device: StreamingDevice):
     return response
 
 
-@app.post(
+@router.post(
     "/api/v1/devices",
     responses={
         status.HTTP_201_CREATED: {"message": "Device added successfully"},
         status.HTTP_409_CONFLICT: {"message": "Device already exists"},
     },
 )
-async def add_device(device: StreamingDevice):
+@inject
+async def add_device(
+    device: StreamingDevice,
+    receiver_service: ReceiverService = Depends(Provide[Container.receiver_service]),
+):
     if receiver_service.add_device(device):
         response = JSONResponse(
             status_code=status.HTTP_201_CREATED,
@@ -62,8 +70,12 @@ async def add_device(device: StreamingDevice):
     return response
 
 
-@app.delete("/api/v1/devices")
-async def remove_device(device: StreamingDevice):
+@router.delete("/api/v1/devices")
+@inject
+async def remove_device(
+    device: StreamingDevice,
+    receiver_service: ReceiverService = Depends(Provide[Container.receiver_service]),
+):
     try:
         receiver_service.remove_device(device)
     except KeyError:
@@ -79,10 +91,9 @@ async def remove_device(device: StreamingDevice):
     return response
 
 
-@app.get("/api/v1/devices", response_model=typing.List[StreamingDevice])
-async def get_devices():
+@router.get("/api/v1/devices", response_model=typing.List[StreamingDevice])
+@inject
+async def get_devices(
+    receiver_service: ReceiverService = Depends(Provide[Container.receiver_service]),
+):
     return list(receiver_service.devices.values())
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)

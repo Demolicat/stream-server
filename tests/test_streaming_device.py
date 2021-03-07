@@ -34,7 +34,7 @@ class TestStreamingDevice(TestCase):
         except ValidationError as e:
             self.fail(e)
 
-    def test_ip_not_match_global_standard(self):
+    def test_ip_not_match_global_standard_throws_exception(self):
         with pytest.raises(ValidationError):
             StreamingDevice(
                 name="RPILEFT",
