@@ -12,11 +12,6 @@ from src.services.receiver_service import ReceiverService
 router = APIRouter()
 
 
-@router.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-
 @router.post(
     "/api/v1/stream",
     response_model=StreamStateResponse,
